@@ -22,7 +22,7 @@ Auto-fill job application forms using your resume and profile, powered by Claude
 ## Setup
 
 1. Click the extension icon to open the popup
-2. **Settings tab** → Enter your Anthropic API key (`sk-ant-api03-…`)
+2. **Settings tab** → Enter your groq API key (`sk-ant-api03-…`)
    - Get one at https://console.anthropic.com
 3. **Profile tab** → Fill in your personal and professional info
 4. **Resume tab** → Upload your PDF resume
