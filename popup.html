@@ -29,7 +29,7 @@
     .pill{padding:3px 9px;border-radius:20px;font-size:9px;font-weight:700;
       letter-spacing:.7px;text-transform:uppercase;flex-shrink:0}
     .pill.ok{background:rgba(67,233,123,.12);color:var(--ac3);border:1px solid rgba(67,233,123,.28)}
-    .pill.no{background:rgba(255,101,132,.12);color:var(--ac2);border:1px solid rgba(255,101,132,.28)}
+    .pill.no{background:rgba(255,101,132,.12);color:var(--ac2);border:1px solid rgba(255,101,132,.28)}}
 
     .tabs{display:flex;background:var(--s1);border-bottom:1px solid var(--b1)}
     .tab{flex:1;padding:9px 4px;text-align:center;font-size:10px;font-weight:600;
@@ -437,14 +437,41 @@ Java, Python, Node.js, Spring Boot, React, AWS, Docker, PostgreSQL, Redis
 ══════════════════════════════════ -->
 <div class="panel" id="tab-settings">
 
+  <!-- PREMIUM SECTION -->
+  <div class="sec">Premium License</div>
+  <div id="premiumStatus" class="box box-green" style="margin-bottom:10px;display:none">
+    <b>✅ Premium Active</b><br>
+    <span id="premiumPlanText" style="font-size:11px;color:#68688a"></span>
+  </div>
+  <div id="freeStatus" class="box box-yellow" style="margin-bottom:10px">
+    <b>🆓 Free Plan</b> — <span id="fillsUsedText">0/5 fills used today</span><br>
+    <span style="font-size:11px;color:#68688a">AI answers for open-ended questions require Premium</span>
+  </div>
+  <div id="licenseInputGroup">
+    <div class="ig">
+      <label>License Key</label>
+      <input type="text" id="licenseKey" placeholder="FF-XXXX-XXXX-XXXX-XXXX" style="font-family:monospace;letter-spacing:1px"/>
+    </div>
+    <div class="brow" style="margin-bottom:12px">
+      <button class="btn btn-s btn-sm" id="activateBtn" style="flex:1">🔑 Activate</button>
+      <button class="btn btn-sm" id="recoverBtn" style="flex:1;background:var(--s2);color:var(--tm);border:1px solid var(--b1)">📧 Recover by Email</button>
+    </div>
+  </div>
+  <div id="deactivateGroup" style="display:none;margin-bottom:12px">
+    <button class="btn btn-sm" id="deactivateBtn" style="width:100%;background:var(--s2);color:#f87171;border:1px solid #3a1c1c">🔓 Deactivate License</button>
+  </div>
+  <a href="https://daseeker67.github.io/formFillAiNinja/index.html" target="_blank" 
+     style="display:block;text-align:center;padding:10px;border-radius:8px;background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;font-size:12px;font-weight:600;text-decoration:none;margin-bottom:14px" 
+     id="upgradeLink">⭐ Upgrade to Premium — Starting at ₹59/mo</a>
+
   <div class="sec">Groq API Key</div>
   <div class="box box-blue" style="margin-bottom:10px">
-    Get a <strong>free key</strong> at <a href="https://console.groq.com" target="_blank"><strong>console.groq.com</strong></a> → Sign up → API Keys → Create Key. Groq runs <strong>Llama 3.3 70B</strong> for free at blazing speed.
+    <strong>🔑 Get your free API key:</strong> Visit <a href="https://console.groq.com" target="_blank">console.groq.com</a> → Create account → API Keys → Create new key. Prefix: <code style="background:rgba(251,191,36,.12);color:var(--ac4);padding:1px 6px;border-radius:4px;font-size:10.5px">gsk_</code>
   </div>
   <div class="ig">
-    <label>API Key <span class="r">*</span></label>
+    <label>Groq API Key <span class="r">*</span></label>
     <div class="krow">
-      <input type="password" id="apiKey" placeholder="gsk_…"/>
+      <input type="password" id="apiKey" placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
       <button class="btn btn-s btn-sm" id="toggleKey">👁</button>
     </div>
   </div>

@@ -173,7 +173,7 @@ Return ONLY valid JSON, no markdown, no commentary outside the JSON:
     }
   ]
 }`;
-}
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AGENT: Full page analysis
@@ -181,6 +181,21 @@ Return ONLY valid JSON, no markdown, no commentary outside the JSON:
 async function agentAnalyzePage({ fields, pageTitle, pageUrl, pageText, profile, resumeSummary }) {
   const apiKey = profile?.apiKey;
   if (!apiKey) return { error: 'No Groq API key. Open extension popup → Settings.' };
+
+  // ── Freemium gating ────────────────────────────────────────────────────
+  const premiumStatus = await checkPremiumStatus();
+
+  if (!premiumStatus.isPremium) {
+    const fillCheck = await checkAndIncrementFills();
+    if (!fillCheck.allowed) {
+      return {
+        error: 'limit_reached',
+        message: `Daily limit reached (${fillCheck.limit}/${fillCheck.limit}). Upgrade to Premium for unlimited fills + AI answers.`,
+        fillsUsed: fillCheck.count,
+        fillsLimit: fillCheck.limit
+      };
+    }
+  }
 
   const profileBlock = buildProfileBlock(profile, resumeSummary);
 
@@ -191,6 +206,21 @@ async function agentAnalyzePage({ fields, pageTitle, pageUrl, pageText, profile,
   const urlHint = (() => {
     try { return new URL(pageUrl).hostname.replace('www.','').split('.')[0]; } catch(e) { return ''; }
   })();
+
+  // ── Free tier: restrict AI answers ─────────────────────────────────────
+  let systemPrompt = getMasterSystemPrompt();
+  if (!premiumStatus.isPremium) {
+    systemPrompt += `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL — FREE TIER RESTRICTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This user is on the FREE plan. You MUST follow these rules:
+1. For FACTUAL fields (name, email, phone, city, state, pincode, nationality, LinkedIn, GitHub, portfolio, work authorization, visa, CTC, notice period, availability, work mode, relocate, preferred cities, disability, job title, experience, company, designation, employment type, industry, education, skills, certifications, languages), fill them normally from the profile.
+2. For SUBJECTIVE/OPEN-ENDED fields (cover letter, "why this company", "tell us about yourself", "best project", "strengths", "weakness", "5-year goal", "why switching", any long-form text questions, any questions requiring AI-crafted answers), set the value to exactly: __PREMIUM_REQUIRED__
+3. For select, radio, and checkbox fields, fill them normally from the profile.
+4. Mark subjective fields that return __PREMIUM_REQUIRED__ with fieldType: "subjective" and skip: false.`;
+  }
 
   const userPrompt = `
 PAGE CONTEXT:
@@ -218,7 +248,7 @@ Instructions:
 - Personalize answers using the company name extracted from the URL
 - Return complete JSON fill plan now`.trim();
 
-  const resp = await callGroq(apiKey, getMasterSystemPrompt(), userPrompt, 4000, 0.3);
+  const resp = await callGroq(apiKey, systemPrompt, userPrompt, 4000, 0.3);
   if (resp.error) return resp;
 
   try {
@@ -345,3 +375,44 @@ function buildProfileBlock(profile, resumeSummary) {
   }
   return block;
 }
+
+// ═══════════════════════════════════════
+// FREEMIUM GATING
+// ═══════════════════════════════════════
+
+const FREE_DAILY_LIMIT = 5;
+
+async function checkPremiumStatus() {
+  const data = await chrome.storage.local.get(["license_valid", "license_plan", "license_expires"]);
+
+  if (!data.license_valid) return { isPremium: false };
+
+  // Check expiry
+  if (data.license_expires && new Date(data.license_expires) < new Date()) {
+    await chrome.storage.local.set({ license_valid: false });
+    return { isPremium: false };
+  }
+
+  return { isPremium: true, plan: data.license_plan };
+}
+
+async function checkAndIncrementFills() {
+  const today = new Date().toISOString().slice(0, 10);
+  const data = await chrome.storage.local.get("daily_fills");
+  let fills = data.daily_fills || { date: today, count: 0 };
+
+  if (fills.date !== today) {
+    fills = { date: today, count: 0 };
+  }
+
+  if (fills.count >= FREE_DAILY_LIMIT) {
+    return { allowed: false, count: fills.count, limit: FREE_DAILY_LIMIT };
+  }
+
+  fills.count += 1;
+  await chrome.storage.local.set({ daily_fills: fills });
+  return { allowed: true, count: fills.count, limit: FREE_DAILY_LIMIT };
+}
+
+// Modify your existing message handler where you process the AI agent
+// Freemium gating is now wired into agentAnalyzePage above.

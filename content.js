@@ -420,7 +420,7 @@
     if (el.parentElement) {
       const firstText = el.parentElement.firstChild;
       if (firstText?.nodeType === 3 && firstText.textContent.trim()) return firstText.textContent.trim();
-      const lbl2 = el.parentElement.querySelector('[class*="label"],[class*="question"],[data-label]');
+      const lbl2 = el.parentElement.querySelector('[class*="label"],[class*="question"],[data-label"]');
       if (lbl2 && !lbl2.contains(el)) return lbl2.innerText.trim();
     }
     if (el.placeholder) return el.placeholder;
@@ -501,6 +501,13 @@
     );
 
     if (!agentRes || agentRes.error) {
+      // ── Handle daily limit reached ─────────────────────────────────────
+      if (agentRes?.error === 'limit_reached') {
+        showWarn('🚀 ' + (agentRes.message || 'Daily free limit reached.'));
+        log('error', agentRes.message || 'Daily limit reached');
+        showUpgradeBanner();
+        resetBtn(); return;
+      }
       showWarn('⚠ Agent error: ' + (agentRes?.error || 'No response'));
       log('error', agentRes?.error || 'No response');
       if (agentRes?.raw) log('error', 'Raw: ' + agentRes.raw.substring(0,200));
@@ -530,6 +537,23 @@
         log('skip', `↷ "${fieldMeta.label.substring(0,40)}": ${fill.reasoning || 'skipped'}`);
         skipped++;
         document.getElementById('__ff_n_skip').textContent = skipped;
+        await sleep(20);
+        continue;
+      }
+
+      // ── Handle premium-locked fields ─────────────────────────────────
+      if (String(fill.value).trim() === '__PREMIUM_REQUIRED__') {
+        log('skip', `⭐ "${fieldMeta.label.substring(0,40)}": Premium required for AI answer`);
+        skipped++;
+        document.getElementById('__ff_n_skip').textContent = skipped;
+        // Show premium badge next to the field
+        if (fieldMeta._el) {
+          const badge = document.createElement('div');
+          badge.innerHTML = '⭐ <b>Premium</b> — AI answer requires paid plan';
+          badge.style.cssText = 'font-size:11px;color:#f59e0b;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:4px 8px;margin-top:4px;font-family:system-ui,sans-serif;';
+          fieldMeta._el.parentElement?.appendChild(badge);
+        }
+        updatePlanRow(fill.index, '⭐', '#f59e0b');
         await sleep(20);
         continue;
       }
@@ -742,6 +766,32 @@
   function showWarn(m) { const w = document.getElementById('__ff_warn'); if (w) { w.textContent = m; w.style.display = 'block'; } }
   function hideWarn()  { const w = document.getElementById('__ff_warn'); if (w) w.style.display = 'none'; }
   function sleep(ms)   { return new Promise(r => setTimeout(r, ms)); }
+
+  // ── Upgrade banner (shown when daily limit reached) ────────────────────
+  function showUpgradeBanner() {
+    if (document.getElementById('formfill-upgrade-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'formfill-upgrade-banner';
+    banner.innerHTML = `
+      <div style="position:fixed;bottom:20px;right:20px;z-index:2147483647;background:linear-gradient(135deg,#1a1a2e,#16213e);
+                  border:1px solid #6c63ff;border-radius:14px;padding:18px 22px;max-width:320px;font-family:system-ui,sans-serif;
+                  box-shadow:0 8px 32px rgba(0,0,0,.5);">
+        <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px;">🚀 Daily Limit Reached</div>
+        <div style="font-size:12px;color:#9898b8;line-height:1.5;margin-bottom:12px;">
+          You've used all 5 free fills today. Upgrade to Premium for unlimited fills + AI-crafted answers.
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="https://amitmishra4447.github.io/formfill-ai/" target="_blank"
+             style="flex:1;text-align:center;padding:8px;border-radius:8px;background:#6c63ff;color:#fff;
+                    font-size:12px;font-weight:600;text-decoration:none;">⭐ Upgrade — ₹59/mo</a>
+          <button onclick="this.closest('#formfill-upgrade-banner').remove()"
+                  style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.05);color:#9898b8;
+                         border:1px solid rgba(255,255,255,.1);font-size:12px;cursor:pointer;">✕</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(banner);
+  }
 
   chrome.runtime.onMessage.addListener(msg => {
     if (msg.action === 'triggerFill') { if (!floatingBtn) showFloatingButton(); openPanel(); }
