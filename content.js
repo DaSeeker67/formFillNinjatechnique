@@ -420,7 +420,7 @@
     if (el.parentElement) {
       const firstText = el.parentElement.firstChild;
       if (firstText?.nodeType === 3 && firstText.textContent.trim()) return firstText.textContent.trim();
-      const lbl2 = el.parentElement.querySelector('[class*="label"],[class*="question"],[data-label"]');
+      const lbl2 = el.parentElement.querySelector('[class*="label"],[class*="question"],[data-label]');
       if (lbl2 && !lbl2.contains(el)) return lbl2.innerText.trim();
     }
     if (el.placeholder) return el.placeholder;
@@ -447,6 +447,112 @@
     const clone = document.body.cloneNode(true);
     clone.querySelectorAll('script,style,noscript,svg').forEach(e => e.remove());
     return (clone.innerText || '').replace(/\s+/g,' ').trim().substring(0, 2000);
+  }
+
+  // ── Compressed page context — extracts structured signals instead of raw text ──
+  function extractPageContext(pageTitle, pageUrl, pageText) {
+    let companyName = '';
+    try { companyName = new URL(pageUrl).hostname.replace('www.','').split('.')[0]; } catch(e) {}
+
+    // Extract job title from headings or title tag
+    let jobTitle = '';
+    const h1 = document.querySelector('h1');
+    if (h1) jobTitle = h1.innerText.trim().substring(0, 100);
+    if (!jobTitle) {
+      const titleMatch = pageTitle.match(/^(.+?)(?:\s*[-–|@]\s*)/);
+      if (titleMatch) jobTitle = titleMatch[1].trim().substring(0, 100);
+    }
+
+    // Extract key requirements — scan for tech keywords in page text
+    const techKeywords = ['python','javascript','java','react','node','aws','docker','kubernetes',
+      'sql','mongodb','tensorflow','pytorch','django','flask','typescript','golang','rust','c++',
+      'machine learning','deep learning','data science','devops','ci/cd','agile','scrum',
+      'ai','ml','nlp','computer vision','cloud','microservices','api','rest','graphql'];
+    const pageTextLower = pageText.toLowerCase();
+    const foundTech = techKeywords.filter(k => pageTextLower.includes(k));
+
+    return { companyName, jobTitle, techKeywords: foundTech.slice(0, 15) };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // LOCAL FACTUAL FILL — map field labels → profile keys (no LLM needed)
+  // ═══════════════════════════════════════════════════════════════════════
+  const FACTUAL_FIELD_MAP = [
+    { patterns: [/first.?name/i],                           key: 'firstName' },
+    { patterns: [/last.?name|surname|family.?name/i],       key: 'lastName' },
+    { patterns: [/full.?name|^name$/i],                     get: p => `${(p.firstName||'')} ${(p.lastName||'')}`.trim() },
+    { patterns: [/e[\-_\s]?mail/i],                         key: 'email' },
+    { patterns: [/phone|mobile|contact.?number|cell/i],     key: 'phone' },
+    { patterns: [/whatsapp/i],                              key: 'whatsapp' },
+    { patterns: [/date.?of.?birth|dob|birth.?date/i],       key: 'dob' },
+    { patterns: [/\bgender\b|\bsex\b/i],                     key: 'gender' },
+    { patterns: [/^city$|current.?city|hometown/i],          key: 'city' },
+    { patterns: [/^state$|province/i],                       key: 'state' },
+    { patterns: [/pin.?code|zip.?code|postal/i],             key: 'pincode' },
+    { patterns: [/nationality|citizenship/i],                key: 'nationality' },
+    { patterns: [/linkedin/i],                               key: 'linkedin' },
+    { patterns: [/github/i],                                 key: 'github' },
+    { patterns: [/portfolio|website|personal.?site/i],       key: 'portfolio' },
+    { patterns: [/work.?auth/i],                             key: 'workAuth' },
+    { patterns: [/visa|sponsorship/i],                       key: 'visaRequired' },
+    { patterns: [/current.?(ctc|salary|compensation)/i],     key: 'currentCTC' },
+    { patterns: [/expected.?(ctc|salary|compensation)/i],    key: 'expectedCTC' },
+    { patterns: [/notice.?period/i],                         key: 'noticePeriod' },
+    { patterns: [/availab|earliest.?join|join.?date/i],      key: 'availability' },
+    { patterns: [/work.?(mode|type|preference)|remote|onsite|hybrid/i], key: 'workType' },
+    { patterns: [/relocat/i],                                key: 'relocate' },
+    { patterns: [/preferred.?cit/i],                         key: 'preferredCities' },
+    { patterns: [/disabilit/i],                              key: 'disability' },
+    { patterns: [/job.?title|position.?title|role.?title|designation/i], key: 'jobTitle' },
+    { patterns: [/total.?experience|years?.?of.?experience|work.?experience/i], key: 'experience' },
+    { patterns: [/current.?company|present.?company|employer.?name/i], key: 'currentCompany' },
+    { patterns: [/current.?designation|current.?role|current.?position/i], key: 'currentDesignation' },
+    { patterns: [/employment.?(type|status)/i],              key: 'empType' },
+    { patterns: [/industry/i],                               key: 'industry' },
+    { patterns: [/degree|qualification|education/i],         key: 'educationDegree' },
+    { patterns: [/speciali[sz]ation|branch|major/i],         key: 'educationBranch' },
+    { patterns: [/college|university|institution/i],         key: 'college' },
+    { patterns: [/graduat.*year|year.*graduat|passing.?year/i], key: 'gradYear' },
+    { patterns: [/cgpa|gpa|percentage|marks/i],              key: 'gpa' },
+    { patterns: [/skill|technologies|tech.?stack/i],         get: p => (p.skills||[]).join(', ') },
+    { patterns: [/programming.?lang|coding.?lang/i],         key: 'languages' },
+    { patterns: [/certif/i],                                 key: 'certifications' },
+  ];
+
+  function classifyAndFillLocally(fields, prof) {
+    const localFills = [];    // fills done locally
+    const llmFields  = [];    // fields that need LLM
+
+    for (const field of fields) {
+      const combined = `${field.label} ${field.name} ${field.placeholder}`.toLowerCase();
+      let matched = false;
+
+      for (const rule of FACTUAL_FIELD_MAP) {
+        if (!rule.patterns.some(p => p.test(combined))) continue;
+        const val = rule.get ? rule.get(prof) : (prof[rule.key] || '').toString().trim();
+        if (!val) break; // profile value empty — let LLM handle
+
+        // For select/radio/checkbox — fuzzy match against options
+        if (field.options && field.options.length > 0) {
+          const vl = val.toLowerCase();
+          const optMatch = field.options.find(o => o.toLowerCase() === vl) ||
+                           field.options.find(o => o.toLowerCase().includes(vl) || vl.includes(o.toLowerCase()));
+          if (optMatch) {
+            localFills.push({ index: field.index, value: optMatch, fieldType: field.type.includes('radio') ? 'radio' : field.type.includes('checkbox') ? 'checkbox' : 'select', skip: false, local: true });
+            matched = true;
+          }
+        } else {
+          localFills.push({ index: field.index, value: val, fieldType: 'factual', skip: false, local: true });
+          matched = true;
+        }
+        break;
+      }
+
+      if (!matched) {
+        llmFields.push(field);
+      }
+    }
+    return { localFills, llmFields };
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -480,25 +586,57 @@
     const pageText  = getPageText();
 
     log('info', `Found ${allFields.length} logical fields on: "${pageTitle.substring(0,50)}"`);
-    setProgress(12);
+    setProgress(10);
 
-    // Serialize for agent (no DOM refs)
-    const fieldsForAgent = allFields.map(({ _el, _options, ...rest }) => rest);
+    // ── Phase 1: Local factual fill — no LLM needed ──────────────────────
+    const serializedFields = allFields.map(({ _el, _options, ...rest }) => rest);
+    const { localFills, llmFields } = classifyAndFillLocally(serializedFields, profile);
 
-    log('ai', `🧠 Agent analyzing page + crafting answers… (${allFields.length} fields)`);
-    setProgress(20);
+    log('success', `⚡ ${localFills.length} fields filled locally (no AI needed)`);
+    log('info', `${llmFields.length} fields need AI analysis`);
+    setProgress(15);
 
-    const agentRes = await new Promise(resolve =>
-      chrome.runtime.sendMessage({
-        action:       'agentAnalyzePage',
-        fields:       fieldsForAgent,
-        pageTitle,
-        pageUrl,
-        pageText,
-        profile,
-        resumeSummary
-      }, resolve)
-    );
+    // If ALL fields are factual → skip LLM call entirely
+    let agentRes = null;
+    if (llmFields.length === 0) {
+      log('success', '✅ All fields factual — skipping LLM call (0 tokens used)');
+      agentRes = { plan: { pageType: 'Factual-only form', companyName: '', jobTitle: '', confidence: 'high', fills: [] } };
+    } else {
+      // ── Extract page context signals (compressed) ────────────────────
+      const pageContext = extractPageContext(pageTitle, pageUrl, pageText);
+
+      log('ai', `🧠 Agent analyzing ${llmFields.length} subjective fields… (${localFills.length} already filled locally)`);
+      setProgress(20);
+
+      agentRes = await new Promise(resolve =>
+        chrome.runtime.sendMessage({
+          action:       'agentAnalyzePage',
+          fields:       llmFields,
+          localFillCount: localFills.length,
+          pageContext,
+          pageTitle,
+          pageUrl,
+          pageText,
+          profile,
+          resumeSummary
+        }, resolve)
+      );
+    }
+
+    // Merge local fills + LLM fills into unified plan
+    if (agentRes && agentRes.plan) {
+      agentRes.plan.fills = [...localFills, ...(agentRes.plan.fills || [])];
+      agentRes.plan.fills.sort((a, b) => a.index - b.index);
+    }
+
+    // Log token savings
+    if (agentRes?.tokenUsage) {
+      const u = agentRes.tokenUsage;
+      log('info', `📊 Tokens: ${u.prompt_tokens} in + ${u.completion_tokens} out = ${u.total_tokens} total`);
+    }
+    if (localFills.length > 0 && llmFields.length > 0) {
+      log('info', `💰 Saved ~${Math.round(localFills.length / allFields.length * 100)}% tokens by filling ${localFills.length} fields locally`);
+    }
 
     if (!agentRes || agentRes.error) {
       // ── Handle daily limit reached ─────────────────────────────────────
@@ -516,9 +654,9 @@
 
     const plan = agentRes.plan;
     setProgress(60);
-    updatePageBadge(plan.pageType, plan.confidence);
+    updatePageBadge(plan.pageType || 'Job application form', plan.confidence || 'high');
     if (plan.companyName) log('ai', `🏢 Company: ${plan.companyName} | Role: ${plan.jobTitle || 'detected'}`);
-    log('ai', `Page understood: "${plan.pageType}" (${plan.confidence} confidence)`);
+    log('ai', `Detected: "${plan.pageType || 'form'}" | ${plan.fills?.length || 0} total fills`);
 
     renderPlan(plan.fills, allFields);
     setProgress(68);
@@ -698,13 +836,15 @@
     if (!body || !fills) return;
 
     const subjCount = fills.filter(f => f.fieldType === 'subjective').length;
-    const factCount  = fills.filter(f => f.fieldType !== 'subjective' && !f.skip).length;
+    const factCount  = fills.filter(f => f.fieldType !== 'subjective' && !f.skip && !f.local).length;
+    const localCount = fills.filter(f => f.local).length;
     const skipCount  = fills.filter(f => f.skip).length;
 
     body.innerHTML = `
       <div style="display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;">
+        <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(67,233,123,0.1);border:1px solid rgba(67,233,123,0.25);color:#43e97b;">⚡ ${localCount} local</span>
         <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;">✦ ${subjCount} AI-crafted</span>
-        <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(67,233,123,0.1);border:1px solid rgba(67,233,123,0.25);color:#43e97b;">→ ${factCount} factual</span>
+        <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.25);color:#a0a0ff;">→ ${factCount} AI factual</span>
         <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(80,80,112,0.2);border:1px solid rgba(80,80,112,0.3);color:#505070;">○ ${skipCount} skipped</span>
       </div>`;
 
@@ -713,13 +853,15 @@
       if (!field) return;
       const isSub  = fill.fieldType === 'subjective';
       const isSkip = fill.skip;
-      const icon   = isSkip ? '○' : isSub ? '✦' : '→';
-      const ic     = isSkip ? '#505070' : isSub ? '#fbbf24' : '#43e97b';
+      const isLocal = fill.local;
+      const icon   = isSkip ? '○' : isLocal ? '⚡' : isSub ? '✦' : '→';
+      const ic     = isSkip ? '#505070' : isLocal ? '#43e97b' : isSub ? '#fbbf24' : '#43e97b';
       const vc     = isSkip ? '#404060' : isSub ? '#e8d8ff' : '#e0e0ff';
       const maxLen = isSub ? 130 : 70;
       const val    = isSkip ? '<em style="color:#404060">skipped</em>'
                    : esc((fill.value||'').substring(0, maxLen)) + ((fill.value||'').length > maxLen ? '…' : '');
-      const badge  = isSub ? `<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);margin-left:4px;">AI</span>` : '';
+      const badge  = isLocal ? `<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:rgba(67,233,123,0.12);color:#43e97b;border:1px solid rgba(67,233,123,0.2);margin-left:4px;">LOCAL</span>`
+                   : isSub ? `<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);margin-left:4px;">AI</span>` : '';
       body.innerHTML += `
         <div class="ffp-field" id="__ff_plan_row_${fill.index}">
           <div class="ffp-field-icon" style="color:${ic}">${icon}</div>
