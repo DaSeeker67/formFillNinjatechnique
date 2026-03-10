@@ -925,7 +925,7 @@
         <div style="display:flex;gap:8px;">
           <a href="https://amitmishra4447.github.io/formfill-ai/" target="_blank"
              style="flex:1;text-align:center;padding:8px;border-radius:8px;background:#6c63ff;color:#fff;
-                    font-size:12px;font-weight:600;text-decoration:none;">⭐ Upgrade — ₹59/mo</a>
+                    font-size:12px;font-weight:600;text-decoration:none;">⭐ Upgrade — ₹19/mo or ₹2000 Lifetime</a>
           <button onclick="this.closest('#formfill-upgrade-banner').remove()"
                   style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.05);color:#9898b8;
                          border:1px solid rgba(255,255,255,.1);font-size:12px;cursor:pointer;">✕</button>
