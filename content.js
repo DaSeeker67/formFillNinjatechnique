@@ -923,7 +923,7 @@
           You've used all 5 free fills today. Upgrade to Premium for unlimited fills + AI-crafted answers.
         </div>
         <div style="display:flex;gap:8px;">
-          <a href="https://amitmishra4447.github.io/formfill-ai/" target="_blank"
+          <a href="https://form-fill-ai-ninja.vercel.app/" target="_blank"
              style="flex:1;text-align:center;padding:8px;border-radius:8px;background:#6c63ff;color:#fff;
                     font-size:12px;font-weight:600;text-decoration:none;">⭐ Upgrade — ₹19/mo or ₹2000 Lifetime</a>
           <button onclick="this.closest('#formfill-upgrade-banner').remove()"
